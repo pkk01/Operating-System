@@ -1,8 +1,6 @@
+#include <unistd.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
-#include <stddef.h>
-
 
 typedef struct block {
     size_t size;
@@ -24,31 +22,32 @@ Block *findFreeBlock(Block **last, size_t size) {
     return current;
 }
 
-Block *requestSpace(Block *last, size_t size) {
-    Block *block = (Block *)malloc(size + BLOCK_SIZE);
-    if (block == NULL) {
-        return NULL;
+Block *requestSpace(Block* last, size_t size) {
+    Block *block;
+    block = sbrk(0);
+    void *request = sbrk(size + BLOCK_SIZE);
+    if (request == (void*) -1) {
+        return NULL; // sbrk failed
+    }
+
+    if (last) { // NULL on first request
+        last->next = block;
     }
 
     block->size = size;
     block->next = NULL;
     block->free = 0;
-
-    if (last) {
-        last->next = block;
-    }
-
     return block;
 }
 
-void *my_malloc(size_t size) {
+void *malloc(size_t size) {
     Block *block;
 
     if (size <= 0) {
         return NULL;
     }
 
-    if (!freeList) {
+    if (!freeList) { // First call
         block = requestSpace(NULL, size);
         if (!block) {
             return NULL;
@@ -57,30 +56,30 @@ void *my_malloc(size_t size) {
     } else {
         Block *last = freeList;
         block = findFreeBlock(&last, size);
-        if (!block) {
+        if (!block) { // Failed to find free block
             block = requestSpace(last, size);
             if (!block) {
                 return NULL;
             }
-        } else {
+        } else { // Found free block
             block->free = 0;
         }
     }
 
-    return block->data;
+    return(block->data);
 }
 
-void my_free(void *ptr) {
+void free(void *ptr) {
     if (!ptr) {
         return;
     }
 
-    Block *block = (Block *)((char *)ptr - offsetof(Block, data));
+    Block *block = (Block*)ptr - 1;
     block->free = 1;
 }
 
 int main() {
-    int *arr = (int *)my_malloc(10 * sizeof(int));
+    int *arr = (int*)malloc(10 * sizeof(int));
     if (arr == NULL) {
         printf("Memory allocation failed\n");
         return 1;
@@ -95,6 +94,6 @@ int main() {
     }
     printf("\n");
 
-    my_free(arr);
+    free(arr);
     return 0;
 }
